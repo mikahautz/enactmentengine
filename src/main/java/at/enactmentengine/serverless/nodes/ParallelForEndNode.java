@@ -102,7 +102,18 @@ public class ParallelForEndNode extends Node {
                 }
 
                 if (data.getType().equals("collection")) {
-                    State.getInstance().addParamToState(list.toString(), data.getSource(), 0, data.getType());
+                    if (list.get(0) instanceof JsonArray) {
+                        // combine all elements of the array into one combined list
+                        List<JsonElement> combinedResult = new ArrayList<>();
+                        for (JsonElement elem : list) {
+                            for (JsonElement e : ((JsonArray) elem)) {
+                                combinedResult.add(e);
+                            }
+                        }
+                        State.getInstance().addParamToState(combinedResult.toString(), data.getSource(), 0, data.getType());
+                    } else {
+                        State.getInstance().addParamToState(list.toString(), data.getSource(), 0, data.getType());
+                    }
                 } else {
                     State.getInstance().addParamToState(list.get(0).toString(), data.getSource(), 0, data.getType());
                 }

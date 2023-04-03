@@ -58,6 +58,7 @@ public class State {
                     result = result.replaceAll("\"", "").replaceAll("\\\\", "");
                     result = result.substring(1, result.length() - 1);
                     List<String> myList = new ArrayList<String>(Arrays.asList(result.split(",")));
+                    myList.replaceAll(String::trim);
                     jsonElement = new Gson().fromJson(new Gson().toJsonTree(myList), JsonElement.class);
                 } else if (result.startsWith("{") && result.endsWith("}")) {
                     jsonElement = new Gson().fromJson(result, JsonElement.class);
