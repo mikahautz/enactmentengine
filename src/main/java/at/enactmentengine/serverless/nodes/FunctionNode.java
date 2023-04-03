@@ -2,12 +2,9 @@ package at.enactmentengine.serverless.nodes;
 
 import at.enactmentengine.serverless.Simulation.ServiceSimulationModel;
 import at.enactmentengine.serverless.exception.MissingInputDataException;
-//import at.enactmentengine.serverless.exception.MissingResourceLinkException;
-//import at.enactmentengine.serverless.main.LambdaHandler;
-//import at.enactmentengine.serverless.main.Local;
 import at.enactmentengine.serverless.object.State;
-import at.enactmentengine.serverless.object.Status;
 import at.enactmentengine.serverless.object.Utils;
+import at.enactmentengine.serverless.utils.LoggerUtil;
 import at.uibk.dps.*;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
@@ -18,19 +15,11 @@ import at.uibk.dps.exception.LatestFinishingTimeException;
 import at.uibk.dps.exception.LatestStartingTimeException;
 import at.uibk.dps.exception.MaxRunningTimeException;
 import at.uibk.dps.function.Function;
-
-/* remove not available dependency */
-//import at.uibk.dps.socketutils.ConstantsNetwork;
-//import at.uibk.dps.socketutils.UtilsSocket;
-//import at.uibk.dps.socketutils.entity.Invocation;
-//import at.uibk.dps.socketutils.logger.RequestLoggerInvocationWrite;
-//import at.uibk.dps.socketutils.logger.UtilsSocketLogger;
-
 import at.uibk.dps.util.Event;
 import at.uibk.dps.util.Type;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
 import jFaaS.Gateway;
 import jFaaS.utils.PairResult;
 import org.slf4j.Logger;
@@ -38,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.sql.Timestamp;
 import java.util.*;
 
 /**
@@ -50,18 +38,18 @@ import java.util.*;
  */
 public class FunctionNode extends Node {
 
-	/**
-	 * Logger for the a function node.
-	 */
-	private static final Logger logger = LoggerFactory.getLogger(FunctionNode.class);
+    /**
+     * Logger for the a function node.
+     */
+    private static final Logger logger = LoggerFactory.getLogger(FunctionNode.class);
     /**
      * The protocol for the http requests.
      */
     private static final String PROTOCOL = "https://";
-	/**
-	 * The number of executed functions.
-	 */
-	private static int counter = 0;
+    /**
+     * The number of executed functions.
+     */
+    private static int counter = 0;
     /**
      * The invoker for the cloud functions.
      */
@@ -70,35 +58,35 @@ public class FunctionNode extends Node {
      * The deployment of the Atomic Function.
      */
     private final String deployment;
-	/**
-	 * The execution id of the workflow (needed to log the execution).
-	 */
-	private int executionId;
+    /**
+     * The execution id of the workflow (needed to log the execution).
+     */
+    private final int executionId;
 
-	/**
-	 * The constraints for the function node.
-	 */
-	private List<PropertyConstraint> constraints;
+    /**
+     * The constraints for the function node.
+     */
+    private final List<PropertyConstraint> constraints;
 
-	/**
-	 * The properties of the function node.
-	 */
-	private List<PropertyConstraint> properties;
+    /**
+     * The properties of the function node.
+     */
+    private final List<PropertyConstraint> properties;
 
-	/**
-	 * Output of the function node.
-	 */
-	private List<DataOutsAtomic> output;
+    /**
+     * Output of the function node.
+     */
+    private List<DataOutsAtomic> output;
 
-	/**
-	 * Input to the function node.
-	 */
-	private List<DataIns> input;
+    /**
+     * Input to the function node.
+     */
+    private final List<DataIns> input;
 
-	/**
-	 * The result of the function node.
-	 */
-	private Map<String, Object> result;
+    /**
+     * The result of the function node.
+     */
+    private Map<String, Object> result;
 
     /**
      * Flag if function was successful or not.
@@ -131,99 +119,135 @@ public class FunctionNode extends Node {
         }
     }
 
-	/**
-	 * Checks the inputs, invokes function and passes results to children.
-	 *
-	 * @return boolean representing success of the node execution.
-	 * @throws Exception on failure.
-	 */
-	@Override
-	public Boolean call() throws Exception {
+    /**
+     * Checks the inputs, invokes function and passes results to children.
+     *
+     * @return boolean representing success of the node execution.
+     *
+     * @throws Exception on failure.
+     */
+    @Override
+    public Boolean call() throws Exception {
 
-		/* The identifier for the current function */
-		int id;
-		synchronized (this) {
-			id = counter++;
-		}
+        /* The identifier for the current function */
+        int id;
+        synchronized (this) {
+            id = counter++;
+        }
 
-		/* Read the resource link of the base function */
+        /* Read the resource link of the base function */
         String resourceLink = Utils.getResourceLink(properties, this);
         logger.info("Executing function " + name + " at resource: " + resourceLink + " [" + System.currentTimeMillis()
                 + "ms], id=" + id);
 
-		/* Actual values of the function input */
-		Map<String, Object> actualFunctionInputs = new HashMap<>();
+        /* Actual values of the function input */
+        Map<String, Object> actualFunctionInputs = new HashMap<>();
 
-		/* Output values of the base function */
-		Map<String, Object> functionOutputs = new HashMap<>();
+        /* Output values of the base function */
+        Map<String, Object> functionOutputs = new HashMap<>();
 
-		try {
-			/* Check if an input is specified */
-			if (input != null) {
+        try {
+            /* Check if an input is specified */
+            if (input != null) {
 
-				/* Iterate over all specified inputs */
-				for (DataIns data : input) {
+                /* Iterate over all specified inputs */
+                for (DataIns data : input) {
+                    String dataSources;
+                    if (this.getId() != 0) {
+                        dataSources = data.getSource() + "/" + this.getId();
+                    } else if (!parents.isEmpty() && parents.get(0).getId() != 0 && parents.get(0).getClass() != ParallelForEndNode.class) {
+                        dataSources = data.getSource() + "/" + parents.get(0).getId();
+                    } else {
+                        dataSources = data.getSource();
+                    }
 
-					String dataSources;
-					if (this.getId() != 0) {
-						dataSources = data.getSource() + "/" + this.getId();
-					} else if(!parents.isEmpty() && parents.get(0).getId() != 0 && parents.get(0).getClass() != ParallelForEndNode.class) {
-						dataSources = data.getSource() + "/" + parents.get(0).getId();
-					} else {
-						dataSources = data.getSource();
-					}
+                    String source = dataSources.replaceAll("\\s+", "").replaceAll("\\[", "").replaceAll("\\]", "");
+                    String[] sourceList = source.split(",");
 
-					String source = dataSources.replaceAll("\\s+","").replaceAll("\\[", "").replaceAll("\\]", "");
-					String[] sourceList = source.split(",");
+                    boolean gotDataFromDataSource = false;
 
-					boolean gotDataFromDataSource = false;
-
-					for(String dataSource : sourceList){
+                    for (String dataSource : sourceList) {
 
                         String subObject = null;
 
                         long count = dataSource.chars().filter(ch -> ch == '/').count();
-                        if(count > 1){
+                        if (count > 1) {
                             subObject = State.getInstance().findJSONSubObject(dataSource.substring(0, dataSource.indexOf("/", dataSource.indexOf("/") + 1)), dataSource.substring(dataSource.indexOf("/", dataSource.indexOf("/") + 1) + 1), count);
                         }
 
-						if (State.getInstance().getStateObject().get(dataSource) != null || subObject != null) {
+                        if (State.getInstance().getStateObject().get(dataSource) != null || subObject != null) {
 
                             String toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).toString();
+                            toUse = toUse.trim();
+                            if (!(data.getType().equals("collection") && toUse.startsWith("{") && toUse.endsWith("}"))) {
+                                toUse = toUse.replaceAll("\"", "").replaceAll("\\\\", "");
+                            }
 
-							State.getInstance().addParamToState(toUse, name + "/" + data.getName(), this.getId(), data.getType());
+                            State.getInstance().addParamToState(toUse, name + "/" + data.getName(), this.getId(), data.getType());
 
-							/* Check if the element should be passed to the output */
-							if (data.getPassing() != null && data.getPassing()) {
-								functionOutputs.put(name + "/" + data.getName(), toUse);
-							} else {
-								actualFunctionInputs.put(data.getName(), toUse);
-							}
+                            Object toUseObj = null;
 
-							gotDataFromDataSource = true;
-						}
-					}
+                            switch (data.getType()) {
+                                case "string":
+                                    toUseObj = toUse;
+                                    break;
+                                case "number":
+                                    if (toUse.contains(".")) {
+                                        toUseObj = Double.parseDouble(toUse);
+                                    } else {
+                                        toUseObj = Integer.parseInt(toUse);
+                                    }
+                                    break;
+                                case "collection":
+                                    if (toUse.startsWith("[") && toUse.endsWith("]")) {
+                                        toUse = toUse.substring(1, toUse.length() - 1);
+                                        List<String> lst = new ArrayList<String>(Arrays.asList(toUse.split(",")));
+                                        lst.replaceAll(String::trim);
+                                        toUseObj = lst;
+                                    } else if (toUse.startsWith("{") && toUse.endsWith("}")) {
+                                        toUseObj = new Gson().<Map<String, Object>>fromJson(
+                                                toUse, new TypeToken<HashMap<String, Object>>() {}.getType()
+                                        );
+                                    }
+                                    break;
+                                case "boolean":
+                                    toUseObj = Boolean.parseBoolean(toUse);
+                                    break;
+                                default:
+                                    throw new IllegalStateException("Unexpected type: " + type);
+                            }
 
-					if(!gotDataFromDataSource){
-						throw new MissingInputDataException(FunctionNode.class.getCanonicalName() + ": " + name
-								+ " needs " + data.getSource() + " !");
-					}
-				}
-			}
-		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
-			return false;
-		}
+                            /* Check if the element should be passed to the output */
+                            if (data.getPassing() != null && data.getPassing()) {
+                                functionOutputs.put(name + "/" + data.getName(), toUseObj);
+                            } else {
+                                actualFunctionInputs.put(data.getName(), toUseObj);
+                            }
 
-		// /* Simulate Availability if specified TODO is this really needed? */
-		// if (Utils.SIMULATE_AVAILABILITY) {
-		// 	SQLLiteDatabase db = new SQLLiteDatabase("jdbc:sqlite:Database/FTDatabase.db");
-		// 	double simAvail = db.getSimulatedAvail(resourceLink);
-		// 	actualFunctionInputs = checkFunctionSimAvail(simAvail, actualFunctionInputs);
-		// }
+                            gotDataFromDataSource = true;
+                        }
+                    }
 
-		/* Log the function input */
-		logFunctionInput(actualFunctionInputs, id);
+                    if (!gotDataFromDataSource) {
+                        throw new MissingInputDataException(FunctionNode.class.getCanonicalName() + ": " + name
+                                + " needs " + data.getSource() + " !");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return false;
+        }
+
+        // /* Simulate Availability if specified TODO is this really needed? */
+        // if (Utils.SIMULATE_AVAILABILITY) {
+        // 	SQLLiteDatabase db = new SQLLiteDatabase("jdbc:sqlite:Database/FTDatabase.db");
+        // 	double simAvail = db.getSimulatedAvail(resourceLink);
+        // 	actualFunctionInputs = checkFunctionSimAvail(simAvail, actualFunctionInputs);
+        // }
+
+        /* Log the function input */
+        logFunctionInput(actualFunctionInputs, id);
 
         /* Parse function with optional constraints and properties */
         Function functionToInvoke = Utils.parseFTConstraints(resourceLink, actualFunctionInputs, constraints, type, name, loopCounter);
@@ -239,29 +263,29 @@ public class FunctionNode extends Node {
         /* Log the function output */
         logFunctionOutput(pairResult.getRTT(), pairResult.getResult(), id);
 
-		State.getInstance().addResultToState(pairResult.getResult(), name, this.getId(), this.output);
+        State.getInstance().addResultToState(pairResult.getResult(), name, this.getId(), this.output);
 
-		/*
-		 * Read the actual function outputs by their key and store them in
-		 * functionOutputs
-		 */
-		// TODO check for success
-		boolean success = getValuesParsed(pairResult.getResult(), functionOutputs);
+        /*
+         * Read the actual function outputs by their key and store them in
+         * functionOutputs
+         */
+        // TODO check for success
+        boolean success = getValuesParsed(pairResult.getResult(), functionOutputs);
 
-		/* Set the result of the function node */
-		result = functionOutputs;
+        /* Set the result of the function node */
+        result = functionOutputs;
 
-		/* Pass the output to the next node */
-		for (Node node : children) {
-			if (getLoopCounter() != -1) {
+        /* Pass the output to the next node */
+        for (Node node : children) {
+            if (getLoopCounter() != -1) {
                 node.setLoopCounter(loopCounter);
                 node.setMaxLoopCounter(maxLoopCounter);
                 node.setConcurrencyLimit(concurrencyLimit);
             }
-			node.call();
-		}
+            node.call();
+        }
 
-         /* Check if the execution identifier is specified (check if execution should be
+        /* Check if the execution identifier is specified (check if execution should be
          * stored in the database)
          */
         if (executionId != -1) {
@@ -277,7 +301,7 @@ public class FunctionNode extends Node {
 //            Utils.storeInDBFunctionInvocation(logger, functionInvocation, executionId);
         }
         return true;
-	}
+    }
 
     /**
      * Add availability value to the function input. TODO is this really needed?
@@ -388,7 +412,7 @@ public class FunctionNode extends Node {
                 // simulate round trip time for used services to subtract below
                 List<String> usedServicesForFunction = ServiceSimulationModel.getUsedServices(properties);
 
-                if(!usedServicesForFunction.isEmpty() && deployment != null) {
+                if (!usedServicesForFunction.isEmpty() && deployment != null) {
                     String lambdaRegion = SimulationNode.extractValuesFromDeployment(deployment).get(1);
                     totalRttForServices = ServiceSimulationModel.calculateTotalRttForUsedServices(lambdaRegion, usedServicesForFunction);
                 }
@@ -399,8 +423,10 @@ public class FunctionNode extends Node {
             // remove the execution times of the services from the round trip time to be stored to the database
             long logRtt = pairResult.getRTT() - totalRttForServices;
 
-            MongoDBAccess.saveLog(event, resourceLink, deployment, name, type, resultString, logRtt, success, loopCounter, maxLoopCounter, start, Type.EXEC);
+            MongoDBAccess.saveLog(event, resourceLink, deployment, name, type, LoggerUtil.clearCredentials(resultString), logRtt, success, loopCounter, maxLoopCounter, start, Type.EXEC);
         }
+        pairResult.setResult(pairResult.getResult());
+
         return pairResult;
     }
 
@@ -414,17 +440,17 @@ public class FunctionNode extends Node {
         if (functionInputs.size() > 20) {
             logger.info("Input for function is large [{}ms], id={}", System.currentTimeMillis(), id);
         } else {
-            logger.info("Input for function " + name + " : " + functionInputs + " [" + System.currentTimeMillis()
+            logger.info("Input for function " + name + " : " + LoggerUtil.clearCredentials(functionInputs) + " [" + System.currentTimeMillis()
                     + "ms], id=" + id + "");
         }
     }
 
-	/**
-	 * Send a request to store the function invocation in the logging database.
-	 *
-	 * @param functionInvocation to store in the database.
-	 */
-	/* code snippet not working because of removed dependency 'com.github.ApolloCEC:socketUtils:-SNAPSHOT' */
+    /**
+     * Send a request to store the function invocation in the logging database.
+     *
+     * @param functionInvocation to store in the database.
+     */
+    /* code snippet not working because of removed dependency 'com.github.ApolloCEC:socketUtils:-SNAPSHOT' */
 //	private void storeInDBFunctionInvocation(Invocation functionInvocation) {
 //
 //		logger.info("Connecting to logger service...");
@@ -442,87 +468,88 @@ public class FunctionNode extends Node {
 //		}
 //	}
 
-	/**
-	 * Parses the json result into a map as key-value pair.
-	 *
-	 * @param result          The stringified json result from the base function.
-	 * @param functionOutputs The output values / map of the base function. a
-	 * @return success or failure of the value parsing.
-	 */
-	private boolean getValuesParsed(String result, Map<String, Object> functionOutputs) {
+    /**
+     * Parses the json result into a map as key-value pair.
+     *
+     * @param result          The stringified json result from the base function.
+     * @param functionOutputs The output values / map of the base function. a
+     *
+     * @return success or failure of the value parsing.
+     */
+    private boolean getValuesParsed(String result, Map<String, Object> functionOutputs) {
 
-		/* Check if there is a function result and a specified output */
-		if (result == null || "null".equals(result)) {
-			return output == null || output.isEmpty();
-		}
+        /* Check if there is a function result and a specified output */
+        if (result == null || "null".equals(result)) {
+            return output == null || output.isEmpty();
+        }
 
-		try {
-			/* Iterate over all specified outputs in the yaml file */
-			for (DataOutsAtomic data : output) {
+        try {
+            /* Iterate over all specified outputs in the yaml file */
+            for (DataOutsAtomic data : output) {
 
                 /* Convert the json result to a json object */
                 JsonObject jsonResult = Utils.generateJson(result, data);
 
-				/* Check if the function output already contains the specified value */
-				if (functionOutputs.containsKey(name + "/" + data.getName())) {
-					continue;
-				}
+                /* Check if the function output already contains the specified value */
+                if (functionOutputs.containsKey(name + "/" + data.getName())) {
+                    continue;
+                }
 
-				// TODO this easier solution seems to work as well; use this or change again?
-				 functionOutputs.put(name + "/" + data.getName(),
-				 jsonResult.get(data.getName()));
+                // TODO this easier solution seems to work as well; use this or change again?
+                functionOutputs.put(name + "/" + data.getName(),
+                        jsonResult.get(data.getName()));
 
-				/* Parse according data type */
+                /* Parse according data type */
 /*				switch (data.getType()) {
-					case "number":
-						Object number = jsonResult.get(data.getName()).getAsDouble();
-						functionOutputs.put(name + "/" + data.getName(), number);
-						break;
-					case "string":
-						functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsString());
-						break;
-					case "collection":
-						// array stays array to later decide which type
-						functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsJsonArray());
-						break;
-					case "object":
-						functionOutputs.put(name + "/" + data.getName(), jsonResult);
-						break;
-					case "bool":
-						functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsBoolean());
-						break;
-					default:
-						logger.error("Error while trying to parse key in function {}. Type: {}", name, data.getType());
-						break;
-				}*/
-			}
+                    case "number":
+                        Object number = jsonResult.get(data.getName()).getAsDouble();
+                        functionOutputs.put(name + "/" + data.getName(), number);
+                        break;
+                    case "string":
+                        functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsString());
+                        break;
+                    case "collection":
+                        // array stays array to later decide which type
+                        functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsJsonArray());
+                        break;
+                    case "object":
+                        functionOutputs.put(name + "/" + data.getName(), jsonResult);
+                        break;
+                    case "bool":
+                        functionOutputs.put(name + "/" + data.getName(), jsonResult.get(data.getName()).getAsBoolean());
+                        break;
+                    default:
+                        logger.error("Error while trying to parse key in function {}. Type: {}", name, data.getType());
+                        break;
+                }*/
+            }
             return !(result.contains("error:") || result.contains("\"error\":"));
 
         } catch (Exception e) {
             logger.error("Error while trying to parse key in function {}", name);
             return false;
         }
-	}
+    }
 
-	/**
-	 * Sets the dataValues and passes the result to all children.
-	 *
-	 * @param input to the child functions.
-	 */
-	@Override
-	public void passResult(Map<String, Object> input) {
-		synchronized (this) {
-			try {
-				this.dataValues = input;
-				for (Node node : children) {
-					node.passResult(input);
-				}
-			} catch (Exception e) {
-				logger.error(e.getMessage(), e);
-			}
-		}
+    /**
+     * Sets the dataValues and passes the result to all children.
+     *
+     * @param input to the child functions.
+     */
+    @Override
+    public void passResult(Map<String, Object> input) {
+        synchronized (this) {
+            try {
+                this.dataValues = input;
+                for (Node node : children) {
+                    node.passResult(input);
+                }
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
+            }
+        }
 
-	}
+    }
 
     /**
      * Get the result of a function node.

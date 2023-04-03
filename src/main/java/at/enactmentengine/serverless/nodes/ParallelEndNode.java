@@ -1,6 +1,7 @@
 package at.enactmentengine.serverless.nodes;
 
 import at.enactmentengine.serverless.object.State;
+import at.enactmentengine.serverless.utils.LoggerUtil;
 import at.uibk.dps.afcl.functions.objects.DataOuts;
 import at.uibk.dps.afcl.functions.objects.PropertyConstraint;
 import com.google.gson.Gson;
@@ -90,10 +91,11 @@ public class ParallelEndNode extends Node {
                 String key = name + "/" + data.getName();
 
                 /* Check if the result contains the specified source */
-                if (state.get(data.getSource()) != null) {
+                String source = data.getSource() + (this.getId() != 0 ? "/" + this.getId() : "");
+                if (state.get(source) != null) {
 
-                    outputValues.put(key, state.get(data.getSource()));
-                    state.add(key, new Gson().fromJson(state.get(data.getSource()).toString(), JsonElement.class));
+                    outputValues.put(key, state.get(source));
+                    state.add(key, new Gson().fromJson(state.get(source).toString(), JsonElement.class));
                     continue;
                 }
 
@@ -104,7 +106,7 @@ public class ParallelEndNode extends Node {
 
             parallelResult = outputValues;
 
-            logger.info("Executing {} ParallelEndNodeOld with output: {}", name, outputValues);
+            logger.info("Executing {} ParallelEndNodeOld with output: {}", name, LoggerUtil.clearCredentials(outputValues));
 
         } else {
             parallelResult = parents.get(0).getResult();
@@ -136,6 +138,25 @@ public class ParallelEndNode extends Node {
     private Map<String, Object> checkCollection(DataOuts dataOuts, String key) {
 
         Map<String, Object> outputValues = new HashMap<>();
+
+        String[] sources = dataOuts.getSource().split(",");
+
+        if (dataOuts.getType().equals("collection") && sources.length > 1) {
+            JsonElement element = null;
+            Map<String, Object> resultValue = new HashMap<>();
+
+            for (String source : sources) {
+                element = State.getInstance().getStateObject().get(source.trim());
+                if (element == null) {
+                    element = State.getInstance().getStateObject().get(source.trim() + "/" + this.getId());
+                }
+                if (element != null) {
+                    resultValue.put(source.trim(), element);
+                }
+            }
+            outputValues.put(key, resultValue);
+            State.getInstance().addParamToState(new Gson().toJson(resultValue), key, this.getId(), dataOuts.getType());
+        }
 
         /* Iterate over all results of the parallel node */
         for (Entry<String, Object> inputElement : parallelResult.entrySet()) {

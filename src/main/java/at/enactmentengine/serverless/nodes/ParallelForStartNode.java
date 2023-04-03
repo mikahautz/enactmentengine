@@ -1,18 +1,22 @@
 package at.enactmentengine.serverless.nodes;
 
-import at.enactmentengine.serverless.object.State;
-import at.enactmentengine.serverless.parser.ElementIndex;
 import at.enactmentengine.serverless.exception.MissingInputDataException;
+import at.enactmentengine.serverless.object.State;
 import at.enactmentengine.serverless.parser.ElementIndex;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.LoopCounter;
 import at.uibk.dps.afcl.functions.objects.PropertyConstraint;
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.NotImplementedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -207,20 +211,35 @@ public class ParallelForStartNode extends Node {
 
                 /* Iterate over inputs and add corresponding values to the data values */
                 for (DataIns data : dataIns) {
-                    String source = data.getSource().replaceAll("\\s+","").replaceAll("\\[", "").replaceAll("\\]", "");;
+                    String dataSources;
+                    if (this.getId() != 0) {
+                        dataSources = data.getSource() + "/" + this.getId();
+                    } else if (!parents.isEmpty() && parents.get(0).getId() != 0 && parents.get(0).getClass() != ParallelForEndNode.class) {
+                        dataSources = data.getSource() + "/" + parents.get(0).getId();
+                    } else {
+                        dataSources = data.getSource();
+                    }
+
+                    String source = dataSources.replaceAll("\\s+", "").replaceAll("\\[", "").replaceAll("\\]", "");
                     String[] sourceList = source.split(",");
 
-                    for(String dataSource : sourceList){
+                    for (String dataSource : sourceList) {
 
                         String subObject = null;
 
                         long count = dataSource.chars().filter(ch -> ch == '/').count();
-                        if(count > 1){
+                        if (count > 1) {
                             subObject = State.getInstance().findJSONSubObject(dataSource.substring(0, dataSource.indexOf("/", dataSource.indexOf("/") + 1)), dataSource.substring(dataSource.indexOf("/", dataSource.indexOf("/") + 1) + 1), count);
                         }
 
                         if (State.getInstance().getStateObject().get(dataSource) != null || subObject != null) {
-                            String toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).getAsString();
+                            String toUse = null;
+                            if (data.getType().equals("collection") || (State.getInstance().getStateObject().get(dataSource) instanceof JsonArray)) {
+                                toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).toString();
+                            } else {
+                                toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).getAsString();
+                            }
+
                             dataValues.put(dataSource, toUse);
                         }
                     }
@@ -454,18 +473,26 @@ public class ParallelForStartNode extends Node {
 
                 /* Check of there are constraints defined */
                 if (data.getConstraints() != null) {
+                    String dataSources;
+                    if (this.getId() != 0) {
+                        dataSources = data.getSource() + "/" + this.getId();
+                    } else if (!parents.isEmpty() && parents.get(0).getId() != 0 && parents.get(0).getClass() != ParallelForEndNode.class) {
+                        dataSources = data.getSource() + "/" + parents.get(0).getId();
+                    } else {
+                        dataSources = data.getSource();
+                    }
 
-                    String source = data.getSource().replaceAll("\\s+","").replaceAll("\\[", "").replaceAll("\\]", "");;
+                    String source = dataSources.replaceAll("\\s+", "").replaceAll("\\[", "").replaceAll("\\]", "");
                     String[] sourceList = source.split(",");
 
-                    for(String dataSource : sourceList) {
+                    for (String dataSource : sourceList) {
 
-                        if(dataValues.get(dataSource) == null) {
+                        if (dataValues.get(dataSource) == null) {
                             continue;
                         }
 
                         /* Check if the actual input is an array */
-                        if(dataValues.get(dataSource) instanceof ArrayList || dataValues.get(dataSource) instanceof JsonArray){
+                        if (dataValues.get(dataSource) instanceof ArrayList || dataValues.get(dataSource) instanceof JsonArray) {
 
                             /* Convert the data to an array */
                             JsonArray dataElements = new Gson().toJsonTree(dataValues.get(dataSource)).getAsJsonArray();
@@ -566,7 +593,7 @@ public class ParallelForStartNode extends Node {
 
                 /* Extract a single value */
                 JsonArray arr = distributedElements.get(i);
-                block = "number".equals(data.getType()) ? arr.get(0).getAsInt() : arr.get(0).getAsString();
+                block = "number".equals(data.getType()) ? arr.get(0).getAsNumber() : arr.get(0).getAsString();
             }
 
             // TODO check if this should be dynamic
@@ -601,10 +628,16 @@ public class ParallelForStartNode extends Node {
         List<JsonArray> blocks = new ArrayList<>();
         JsonArray currentBlock = new JsonArray();
 
+        // check if the JsonArray contains the array as its first and only element
+        String[] items = elements.get(0).toString().split(",");
+        if (elements.size() == 1 && items.length > 1) {
+            elements = new Gson().toJsonTree(new Gson().fromJson(elements.get(0).getAsString(), String[].class)).getAsJsonArray();
+        }
+
         /* Iterate over the whole array and distribute the elements to the blocks */
         for (int i = 0; i < elements.size(); i++) {
 
-            currentBlock.add(elements.get(i));
+            currentBlock.add(elements.get(i).getAsString().replace("[", "").replace("]", "").trim());
 
             /* Complete the current block if it is full or we ran out of elements */
             if (currentBlock.size() >= blockSize || i == (elements.size() - 1)) {

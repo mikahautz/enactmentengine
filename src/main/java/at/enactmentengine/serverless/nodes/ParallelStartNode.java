@@ -1,8 +1,8 @@
 package at.enactmentengine.serverless.nodes;
 
+import at.enactmentengine.serverless.exception.MissingInputDataException;
 import at.enactmentengine.serverless.object.State;
 import at.uibk.dps.afcl.functions.objects.DataIns;
-import at.enactmentengine.serverless.exception.MissingInputDataException;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -69,25 +69,33 @@ public class ParallelStartNode extends Node {
 
             /* Iterate over the possible inputs and look for defined ones */
             for (DataIns data : definedInput) {
+                String dataSources;
+                if (this.getId() != 0) {
+                    dataSources = data.getSource() + "/" + this.getId();
+                } else if (!parents.isEmpty() && parents.get(0).getId() != 0 && parents.get(0).getClass() != ParallelForEndNode.class) {
+                    dataSources = data.getSource() + "/" + parents.get(0).getId();
+                } else {
+                    dataSources = data.getSource();
+                }
 
-                String source = data.getSource().replaceAll("\\s+","").replaceAll("\\[", "").replaceAll("\\]", "");;
+                String source = dataSources.replaceAll("\\s+", "").replaceAll("\\[", "").replaceAll("\\]", "");
                 String[] sourceList = source.split(",");
 
                 boolean gotDataFromDataSource = false;
 
-                for(String dataSource : sourceList){
+                for (String dataSource : sourceList) {
 
                     String subObject = null;
 
                     long count = data.getSource().chars().filter(ch -> ch == '/').count();
-                    if(count > 1){
+                    if (count > 1) {
                         subObject = State.getInstance().findJSONSubObject(data.getSource().substring(0, data.getSource().indexOf("/", data.getSource().indexOf("/") + 1)), data.getSource().substring(data.getSource().indexOf("/", data.getSource().indexOf("/") + 1) + 1), count);
                     }
 
                     if(state.get(dataSource) != null || subObject != null) {
                         String toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).toString();
 
-                        state.add(name + "/" + data.getName(), new Gson().fromJson(toUse, JsonElement.class));
+                        state.add(name + "/" + data.getName() + (this.getId() != 0 ? "/" + this.getId() : ""), new Gson().fromJson(toUse, JsonElement.class));
                         gotDataFromDataSource = true;
                     }
                 }

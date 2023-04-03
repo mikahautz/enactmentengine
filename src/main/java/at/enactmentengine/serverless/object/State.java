@@ -4,6 +4,8 @@ import at.enactmentengine.serverless.exception.MissingOutputDataException;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
 import com.google.gson.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -36,17 +38,30 @@ public class State {
     public synchronized void addParamToState(String result, String name, Integer id, String type) {
         type = type.toLowerCase(Locale.ROOT);
 
-        JsonElement jsonElement;
+        JsonElement jsonElement = null;
 
         switch (type) {
             case "string":
                 jsonElement = new JsonPrimitive(result.replace("\"", ""));
                 break;
-            case "number" :
-                jsonElement = new JsonPrimitive(Double.parseDouble(result.replaceAll("\"", "").replaceAll("\\\\", "")));
+            case "number":
+                result = result.replaceAll("\"", "").replaceAll("\\\\", "");
+                if (result.contains(".")) {
+                    jsonElement = new JsonPrimitive(Double.parseDouble(result));
+                } else {
+                    jsonElement = new JsonPrimitive(Integer.parseInt(result));
+                }
                 break;
             case "collection":
-                jsonElement = new Gson().fromJson(result.replaceAll("\"", "").replaceAll("\\\\", ""), JsonElement.class);
+                result = result.trim();
+                if (result.startsWith("[") && result.endsWith("]")) {
+                    result = result.replaceAll("\"", "").replaceAll("\\\\", "");
+                    result = result.substring(1, result.length() - 1);
+                    List<String> myList = new ArrayList<String>(Arrays.asList(result.split(",")));
+                    jsonElement = new Gson().fromJson(new Gson().toJsonTree(myList), JsonElement.class);
+                } else if (result.startsWith("{") && result.endsWith("}")) {
+                    jsonElement = new Gson().fromJson(result, JsonElement.class);
+                }
                 break;
             case "boolean":
                 jsonElement = new JsonPrimitive(Boolean.parseBoolean(result));
@@ -77,15 +92,24 @@ public class State {
         /**
          * Check if key 'dataSource' is accessible, could not be accessible if combinedSource in is used
          */
-        if(State.getInstance().getStateObject().get(dataSource) != null){
-            JsonObject jsonElement = new Gson().fromJson(State.getInstance().getStateObject().get(dataSource), JsonElement.class).getAsJsonObject();
+        JsonElement elem = State.getInstance().getStateObject().get(dataSource);
+        if (elem != null) {
+            try {
+                JsonObject jsonElement = new Gson().fromJson(State.getInstance().getStateObject().get(dataSource), JsonElement.class).getAsJsonObject();
 
-            String[] subKeyList = subKey.split("/");
+                String[] subKeyList = subKey.split("/");
 
-            for(int i = 0; i < subKeyList.length; i++){
-                retval = jsonElement.get(subKeyList[i]) != null ? jsonElement.get(subKeyList[i]).toString() : null;
-                if(i < count - 2){
-                    jsonElement = new Gson().fromJson(retval, JsonElement.class).getAsJsonObject();
+                for (int i = 0; i < subKeyList.length; i++) {
+                    retval = jsonElement.get(subKeyList[i]) != null ? jsonElement.get(subKeyList[i]).toString() : null;
+                    if (i < count - 2) {
+                        jsonElement = new Gson().fromJson(retval, JsonElement.class).getAsJsonObject();
+                    }
+                }
+            } catch (IllegalStateException e) {
+                if (elem instanceof JsonArray) {
+                    retval = elem.toString();
+                } else {
+                    retval = elem.getAsString();
                 }
             }
         }

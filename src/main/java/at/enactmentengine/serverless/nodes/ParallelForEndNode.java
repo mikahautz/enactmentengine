@@ -1,7 +1,8 @@
 package at.enactmentengine.serverless.nodes;
 
-import at.enactmentengine.serverless.object.State;
 import at.enactmentengine.serverless.Simulation.SimulationParameters;
+import at.enactmentengine.serverless.object.State;
+import at.enactmentengine.serverless.utils.LoggerUtil;
 import at.uibk.dps.afcl.functions.objects.DataOuts;
 import at.uibk.dps.databases.MongoDBAccess;
 import at.uibk.dps.util.Event;
@@ -9,7 +10,6 @@ import at.uibk.dps.util.Type;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,11 +97,15 @@ public class ParallelForEndNode extends Node {
                 Set<String> set = State.getInstance().getStateObject().keySet().stream().filter(s -> s.startsWith(data.getSource())).collect(Collectors.toSet());
 
                 ArrayList<JsonElement> list = new ArrayList<>();
-                for(String partialKey : set){
+                for (String partialKey : set) {
                     list.add(State.getInstance().getStateObject().get(partialKey));
                 }
 
-                State.getInstance().addParamToState(list.toString(), data.getSource(), 0, data.getType());
+                if (data.getType().equals("collection")) {
+                    State.getInstance().addParamToState(list.toString(), data.getSource(), 0, data.getType());
+                } else {
+                    State.getInstance().addParamToState(list.get(0).toString(), data.getSource(), 0, data.getType());
+                }
 
                 /* Define the output key */
                 String key = name + "/" + data.getName();
@@ -119,7 +123,7 @@ public class ParallelForEndNode extends Node {
 
         parallelForResult = outputValues;
 
-        logger.info("Executing {} ParallelForEndNodeOld with output: {}", name, outputValues);
+        logger.info("Executing {} ParallelForEndNodeOld with output: {}", name, LoggerUtil.clearCredentials(outputValues));
         if (simulate) {
             SimulationParameters.reset();
             MongoDBAccess.saveLog(Event.PARALLEL_FOR_END, null, null, null, null, null,
