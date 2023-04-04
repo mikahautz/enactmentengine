@@ -151,8 +151,8 @@ public class ExecutableWorkflow {
                 /* Check if the actual input contains the expected input */
                 if (input != null && input.containsKey(data.getSource())) {
 
-                    /* Add the actual input to the list of actually present inputs */
-                    presentInput.put(workflowName + "/" + data.getName(), input.get(data.getSource()));
+                    /* Add the input of the workflow to the state*/
+                    State.getInstance().addParamToState(input.get(data.getSource()).toString(), workflowName + "/" + data.getName(), 0, data.getType());
                 } else {
                     /* The expected input is not present */
                     throw new MissingInputDataException(workflowName + " needs more input data: " + data.getSource());

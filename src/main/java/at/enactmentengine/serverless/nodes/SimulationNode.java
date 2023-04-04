@@ -6,6 +6,7 @@ import at.enactmentengine.serverless.Simulation.SimulationParameters;
 import at.enactmentengine.serverless.exception.*;
 import at.enactmentengine.serverless.object.PairResult;
 import at.enactmentengine.serverless.object.QuadrupleResult;
+import at.enactmentengine.serverless.object.State;
 import at.enactmentengine.serverless.object.Utils;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
@@ -21,6 +22,7 @@ import at.uibk.dps.function.Function;
 import at.uibk.dps.util.Event;
 import at.uibk.dps.util.Provider;
 import at.uibk.dps.util.Type;
+import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -238,9 +240,17 @@ public class SimulationNode extends Node {
         // set the result of the simulation as the result of the SimulationNode
         result = simResult.getOutput();
 
+        for (DataIns in : this.input) {
+            if (in.getPassing() != null && in.getPassing()) {
+                this.output.add(new DataOutsAtomic(in.getName(), in.getType()));
+            }
+        }
+
+        State.getInstance().addResultToState(new Gson().toJson(result), name, this.getId(), new ArrayList<>(this.output));
+
         /* Pass the output to the next node */
         for (Node node : children) {
-            node.passResult(result);
+//            node.passResult(result);
             if (getLoopCounter() != -1) {
                 node.setLoopCounter(loopCounter);
                 node.setMaxLoopCounter(maxLoopCounter);
@@ -762,6 +772,12 @@ public class SimulationNode extends Node {
             }
         }
 
+        for (DataIns in : this.input) {
+            if (in.getPassing() != null && in.getPassing()) {
+                parseOutputValues(new DataOutsAtomic(in.getName(), in.getType()), null, outputs, true);
+            }
+        }
+
         return outputs;
     }
 
@@ -793,28 +809,28 @@ public class SimulationNode extends Node {
                 } else {
                     throw new NumberFormatException("Given value is not a number.");
                 }
-                outputs.put(name + "/" + out.getName(), num);
+                outputs.put(out.getName(), num);
                 break;
             case "string":
                 if (useDefault) {
-                    outputs.put(name + "/" + out.getName(), "");
+                    outputs.put(out.getName(), "");
                 } else {
-                    outputs.put(name + "/" + out.getName(), JsonParser.parseString(constraint.getValue()));
+                    outputs.put(out.getName(), JsonParser.parseString(constraint.getValue()));
                 }
                 break;
             case "collection":
                 if (useDefault) {
-                    outputs.put(name + "/" + out.getName(), JsonParser.parseString("[]").getAsJsonArray());
+                    outputs.put(out.getName(), JsonParser.parseString("[]").getAsJsonArray());
                 } else {
                     // array stays array to later decide which type
-                    outputs.put(name + "/" + out.getName(), JsonParser.parseString(numStr).getAsJsonArray());
+                    outputs.put(out.getName(), JsonParser.parseString(numStr).getAsJsonArray());
                 }
                 break;
             case "bool":
                 if (useDefault) {
-                    outputs.put(name + "/" + out.getName(), Boolean.FALSE);
+                    outputs.put(out.getName(), Boolean.FALSE);
                 } else {
-                    outputs.put(name + "/" + out.getName(), Boolean.valueOf(constraint.getValue()));
+                    outputs.put(out.getName(), Boolean.valueOf(constraint.getValue()));
                 }
                 break;
             default:
