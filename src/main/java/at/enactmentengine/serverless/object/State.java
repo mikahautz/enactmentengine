@@ -3,11 +3,9 @@ package at.enactmentengine.serverless.object;
 import at.enactmentengine.serverless.exception.MissingOutputDataException;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 /**
  * Class which holds the current state (all input and output data of the workflow and each function).
@@ -57,9 +55,21 @@ public class State {
                 if (result.startsWith("[") && result.endsWith("]")) {
                     result = result.replaceAll("\"", "").replaceAll("\\\\", "");
                     result = result.substring(1, result.length() - 1);
-                    List<String> myList = new ArrayList<String>(Arrays.asList(result.split(",")));
-                    myList.replaceAll(String::trim);
-                    jsonElement = new Gson().fromJson(new Gson().toJsonTree(myList), JsonElement.class);
+                    if (result.startsWith("{") && result.endsWith("}")) {
+                        // if it is a list of json objects
+                        Gson gson = new Gson();
+                        List<Map<String, Object>> objects = gson.fromJson("[" + result + "]", new TypeToken<List<Map<String, Object>>>(){}.getType());
+                        JsonArray jsonArray = new JsonArray();
+                        for (Map<String, Object> object : objects) {
+                            JsonObject jsonObject = gson.toJsonTree(object).getAsJsonObject();
+                            jsonArray.add(jsonObject);
+                        }
+                        jsonElement = jsonArray;
+                    } else {
+                        List<String> myList = new ArrayList<String>(Arrays.asList(result.split(",", -1)));
+                        myList.replaceAll(String::trim);
+                        jsonElement = new Gson().fromJson(new Gson().toJsonTree(myList), JsonElement.class);
+                    }
                 } else if (result.startsWith("{") && result.endsWith("}")) {
                     jsonElement = new Gson().fromJson(result, JsonElement.class);
                 }

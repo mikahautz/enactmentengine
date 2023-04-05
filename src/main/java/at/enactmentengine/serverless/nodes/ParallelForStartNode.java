@@ -6,9 +6,7 @@ import at.enactmentengine.serverless.parser.ElementIndex;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.LoopCounter;
 import at.uibk.dps.afcl.functions.objects.PropertyConstraint;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonPrimitive;
+import com.google.gson.*;
 import org.apache.commons.lang3.NotImplementedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -629,15 +627,23 @@ public class ParallelForStartNode extends Node {
         JsonArray currentBlock = new JsonArray();
 
         // check if the JsonArray contains the array as its first and only element
-        String[] items = elements.get(0).toString().split(",");
-        if (elements.size() == 1 && items.length > 1) {
-            elements = new Gson().toJsonTree(new Gson().fromJson(elements.get(0).getAsString(), String[].class)).getAsJsonArray();
+        String tmp = elements.get(0).toString().replaceAll("\"", "").replaceAll("\\\\", "");
+        if (tmp.charAt(1) == '{' && tmp.charAt(tmp.length() - 2) == '}') {
+            elements = JsonParser.parseString(elements.get(0).getAsString()).getAsJsonArray();
+        } else {
+            String[] items = elements.get(0).toString().split(",");
+            if (elements.size() == 1 && items.length > 1) {
+                elements = new Gson().toJsonTree(new Gson().fromJson(elements.get(0).getAsString(), String[].class)).getAsJsonArray();
+            }
         }
 
         /* Iterate over the whole array and distribute the elements to the blocks */
         for (int i = 0; i < elements.size(); i++) {
-
-            currentBlock.add(elements.get(i).getAsString().replace("[", "").replace("]", "").trim());
+            if (elements.get(i) instanceof JsonObject) {
+                currentBlock.add(new Gson().toJson(elements.get(i)));
+            } else {
+                currentBlock.add(elements.get(i).getAsString().replace("[", "").replace("]", "").trim());
+            }
 
             /* Complete the current block if it is full or we ran out of elements */
             if (currentBlock.size() >= blockSize || i == (elements.size() - 1)) {

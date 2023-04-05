@@ -179,8 +179,13 @@ public class FunctionNode extends Node {
 
                             String toUse = subObject != null ? subObject : State.getInstance().getStateObject().get(dataSource).toString();
                             toUse = toUse.trim();
-                            if (!(data.getType().equals("collection") && toUse.startsWith("{") && toUse.endsWith("}"))) {
-                                toUse = toUse.replaceAll("\"", "").replaceAll("\\\\", "");
+                            if (!(toUse.startsWith("{") && toUse.endsWith("}"))) {
+                                if (toUse.length() > 2 && toUse.charAt(1) == '{' && toUse.charAt(toUse.length() - 2) == '}') {
+                                    toUse = toUse.substring(1, toUse.length()-1);
+                                    toUse = toUse.replaceAll("\\\\", "");
+                                } else {
+                                    toUse = toUse.replaceAll("\"", "").replaceAll("\\\\", "");
+                                }
                             }
 
                             State.getInstance().addParamToState(toUse, name + "/" + data.getName(), this.getId(), data.getType());
@@ -200,10 +205,15 @@ public class FunctionNode extends Node {
                                     break;
                                 case "collection":
                                     if (toUse.startsWith("[") && toUse.endsWith("]")) {
-                                        toUse = toUse.substring(1, toUse.length() - 1);
-                                        List<String> lst = new ArrayList<String>(Arrays.asList(toUse.split(",")));
-                                        lst.replaceAll(String::trim);
-                                        toUseObj = lst;
+                                        if (toUse.charAt(1) == '{' && toUse.charAt(toUse.length() - 2) == '}') {
+                                            // if it is a list of json objects
+                                            toUseObj = new Gson().fromJson(toUse, new TypeToken<List<Map<String, Object>>>(){}.getType());
+                                        } else {
+                                            toUse = toUse.substring(1, toUse.length() - 1);
+                                            List<String> lst = new ArrayList<String>(Arrays.asList(toUse.split(",", -1)));
+                                            lst.replaceAll(String::trim);
+                                            toUseObj = lst;
+                                        }
                                     } else if (toUse.startsWith("{") && toUse.endsWith("}")) {
                                         toUseObj = new Gson().<Map<String, Object>>fromJson(
                                                 toUse, new TypeToken<HashMap<String, Object>>() {}.getType()
