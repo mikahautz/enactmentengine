@@ -102,7 +102,7 @@ public class ParallelForEndNode extends Node {
                 }
 
                 if (data.getType().equals("collection")) {
-                    if (list.get(0) instanceof JsonArray) {
+                    if (!list.isEmpty() && list.get(0) instanceof JsonArray) {
                         // combine all elements of the array into one combined list
                         List<JsonElement> combinedResult = new ArrayList<>();
                         for (JsonElement elem : list) {
