@@ -102,6 +102,14 @@ public class JsonProvider implements DataProvider {
     }
 
     @Override
+    public Region getRegionEntry(String region) {
+        return this.regions.stream()
+                .filter(r -> r.getRegion().equals(region))
+                .findFirst()
+                .orElseThrow(() -> new DatabaseException("No region found with the given code: " + region));
+    }
+
+    @Override
     public int getRegionId(String regionName) {
         return this.regionIdByRegionName.get(regionName);
     }
@@ -198,9 +206,9 @@ public class JsonProvider implements DataProvider {
     }
 
     private String determineDataTransferType(String type) {
-        if (type.equals("FILE_DL") || type.equals("DT_REMOVE")) {
+        if (type.equals("FILE_DL") || type.equals("DT_REMOVE") || type.equals("download")) {
             return "download";
-        } else if (type.equals("FILE_UP") || type.equals("UT_REMOVE")) {
+        } else if (type.equals("FILE_UP") || type.equals("UT_REMOVE") || type.equals("upload")) {
             return "upload";
         } else {
             return null;

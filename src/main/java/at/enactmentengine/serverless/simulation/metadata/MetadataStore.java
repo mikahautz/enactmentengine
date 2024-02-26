@@ -46,6 +46,11 @@ public class MetadataStore implements DataStore {
     }
 
     @Override
+    public Region getRegionEntry(String region) {
+        return dataProvider.getRegionEntry(region);
+    }
+
+    @Override
     public int getRegionId(String regionName) {
         return dataProvider.getRegionId(regionName);
     }
