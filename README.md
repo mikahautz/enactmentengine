@@ -215,6 +215,52 @@ AFCL language offers to describe `parallelFor` loops with a dynamic loop iterati
 
 xAFCLSim can determine all siblings and twins of a function if you specify the provider, region, and assigned memory of a function, as it is shown in the field *deployment* in the above example. Use the following format *"\<providerName\>\_\<RegionCode\>\_\<memoryInMB\>"*. In the given example, the function MonteCarlo is deployed on AWS Tokyo with 128 MB.
 
+#### Simulate functions using Services:
+
+```yaml
+- function:
+  name: "function1"
+  type: "function1Type"
+  dataIns:
+  - name: "testFile"
+    type: "string"
+    source: "XXX/testFile"
+  - name: "resultFiles"
+    type: "string"
+    source: "YYY/resultFiles"
+  dataOuts:
+    - name: "resultFilesPath"
+      type: "string"
+  properties:
+  - name: "resource"
+    value: "arn:aws:lambda:eu-central-1:xxx:function:f1"
+  - services:
+    - name: "downloadToFunction"
+      serviceType: "download"
+      workPerUnit: 14.5                 # the total filesize of all files to download
+      amountOfUnits: 2                  # the amount of files to download
+      source: "eu-west-2"               # indicates that the download region should be eu-west-2
+      target: "functionCompute.target"  # references the region of the function in which it should be simulated
+      dbServiceRegion: "eu-west-1"      # (Optional) indicates that the RTT in the DB contains the download time to this region
+    - name: "functionCompute"
+      serviceType: "compute"
+      workPerUnit: 100
+      amountOfUnits: 10
+      source: "function1.region"        # references the original region of the function (eu-central-1)
+      target: "eu-west-2"               # indicates where the function should be simulated
+    - name: "uploadFromFunction"
+      serviceType: "upload"
+      workPerUnit: 56.1
+      amountOfUnits: 3
+      source: "functionCompute.target"  # references the region of the function in which it should be simulated
+      target: "eu-west-2"               # indicates that the upload region should be eu-west-2
+      dbServiceRegion: "eu-west-1"      # (Optional) indicates that the RTT in the DB contains the upload time to this region
+```
+
+The `dbServiceRegion` field is optional and is used to subtract the transfer time from the stored RTT in the DB from
+the function region to this specific region. If no region is specified, then it is assumed that the function used the 
+collocated service region, and this time is removed from the stored RTT before simulating the newly specified service.
+
 Note: 
 
 - *Siblings* of a function are all deployments in the same cloud region with different memory.
