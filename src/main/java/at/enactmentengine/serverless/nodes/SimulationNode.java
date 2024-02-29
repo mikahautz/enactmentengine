@@ -15,6 +15,7 @@ import at.enactmentengine.serverless.simulation.metadata.model.Region;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
 import at.uibk.dps.afcl.functions.objects.PropertyConstraint;
+import at.uibk.dps.afcl.functions.objects.Service;
 import at.uibk.dps.cronjob.ManualUpdate;
 import at.uibk.dps.databases.MongoDBAccess;
 import at.uibk.dps.exception.InvokationFailureException;
@@ -94,7 +95,7 @@ public class SimulationNode extends Node {
      */
     private long amountParallelFunctions = -1;
 
-    private List<String> serviceStrings;
+    private final List<Service> services;
 
     /**
      * String containing the times of the simulated services.
@@ -131,7 +132,7 @@ public class SimulationNode extends Node {
         if (output == null) {
             this.output = new ArrayList<>();
         }
-        this.serviceStrings = ServiceSimulationModel.getUsedServices(this.properties);
+        this.services = ServiceSimulationModel.getUsedServices(this.properties, this);
         this.useSessionOverhead = useSessionOverhead;
     }
 
@@ -640,12 +641,18 @@ public class SimulationNode extends Node {
         Provider provider = null;
         int concurrencyOverhead;
         at.enactmentengine.serverless.simulation.metadata.model.Provider providerEntry;
+        Service simulationService = getSimulationService();
 
         if (deploymentString != null) {
             elements = extractValuesFromDeployment(deploymentString);
             memory = Integer.parseInt(elements.get(0));
             region = elements.get(1);
             provider = Provider.valueOf(elements.get(2));
+            providerEntry = MetadataStore.get().getProviderEntry(provider);
+        } else if (simulationService != null) {
+            memory = entry.getMemorySize(); // TODO assume same memory size?
+            region = simulationService.getTarget();
+            provider = MetadataStore.get().getRegionEntry(region).getProvider();
             providerEntry = MetadataStore.get().getProviderEntry(provider);
         } else {
             providerEntry = MetadataStore.get().getProviderEntry(Utils.detectProvider(entry.getKmsArn()));
@@ -654,7 +661,7 @@ public class SimulationNode extends Node {
 
         // if the deployment is null or deployment is already saved in the MD-DB,
         // simulate in the same region and with the same memory
-        if (deploymentString == null || deploymentsAreTheSame(entry, memory, provider, region)) {
+        if ((deploymentString == null && simulationService == null) || deploymentsAreTheSame(entry, memory, provider, region)) {
             // simply read from the values from the DB without calculating them again
             result = extractRttAndCost(success, concurrencyOverhead, entry);
         } else {
@@ -707,20 +714,32 @@ public class SimulationNode extends Node {
         }
 
         // simulate external services
-        if(!serviceStrings.isEmpty()) {
-            jFaaS.utils.PairResult<String, Long> simResult = null;
-
-            if (region == null) {
-                simResult = ServiceSimulationModel.calculateTotalRttForUsedServices(entry.getRegionId().intValue(), serviceStrings);
-            } else {
-                simResult = ServiceSimulationModel.calculateTotalRttForUsedServices(entry.getRegionId().intValue(), region, serviceStrings);
-            }
+        if (!services.isEmpty()) {
+            jFaaS.utils.PairResult<String, Long> simResult = ServiceSimulationModel.calculateTotalRttForUsedServices(
+                    entry.getRegionId().intValue(), region, services);
 
             result.setRtt(result.getRtt() + simResult.getRTT());
             this.serviceOutput = simResult.getResult();
         }
 
         return result;
+    }
+
+    /**
+     * Returns the service responsible for simulating the function.
+     *
+     * @return the function simulation service, or null if the function should not be simulated in a different region
+     */
+    private Service getSimulationService() {
+        for (Service s : this.services) {
+            if (s.getServiceType().equalsIgnoreCase("compute")) {
+                // only return the entry if source and target are not the same
+                if (s.getTarget() != null && !s.getSource().equals(s.getTarget())) {
+                    return s;
+                }
+            }
+        }
+        return null;
     }
 
     /**

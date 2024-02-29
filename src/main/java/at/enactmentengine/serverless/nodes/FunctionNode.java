@@ -8,6 +8,7 @@ import at.uibk.dps.*;
 import at.uibk.dps.afcl.functions.objects.DataIns;
 import at.uibk.dps.afcl.functions.objects.DataOutsAtomic;
 import at.uibk.dps.afcl.functions.objects.PropertyConstraint;
+import at.uibk.dps.afcl.functions.objects.Service;
 import at.uibk.dps.databases.MongoDBAccess;
 import at.uibk.dps.exception.InvokationFailureException;
 import at.uibk.dps.exception.LatestFinishingTimeException;
@@ -348,7 +349,7 @@ public class FunctionNode extends Node {
                 event = Event.FUNCTION_END;
 
                 // simulate round trip time for used services to subtract below
-                List<String> usedServicesForFunction = ServiceSimulationModel.getUsedServices(properties);
+                List<Service> usedServicesForFunction = ServiceSimulationModel.getUsedServices(properties, this);
 
                 if(!usedServicesForFunction.isEmpty() && deployment != null) {
                     String lambdaRegion = SimulationNode.extractValuesFromDeployment(deployment).get(1);

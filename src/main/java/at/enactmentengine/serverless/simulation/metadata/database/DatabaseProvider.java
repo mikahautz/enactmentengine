@@ -91,6 +91,17 @@ public class DatabaseProvider implements DataProvider {
     }
 
     @Override
+    public Region getRegionEntry(String region) {
+        return jdbiInstance.withHandle(handle ->
+                handle.createQuery("SELECT * FROM region WHERE region = ?")
+                        .bind(0, region)
+                        .mapToBean(Region.class)
+                        .findOne()
+                        .orElseThrow(() -> new DatabaseException("No region found with the given code: " + region))
+        );
+    }
+
+    @Override
     public int getRegionId(String regionName) {
         return jdbiInstance.withHandle(handle ->
                 handle.createQuery("SELECT id FROM region WHERE region = ?")

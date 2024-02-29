@@ -45,6 +45,15 @@ public interface DataProvider {
     Region getRegionEntry(String region, at.uibk.dps.util.Provider providerEnum);
 
     /**
+     * Gets the entry from the metadata DB for the given region.
+     *
+     * @param region the region code
+     *
+     * @return the entry from the region in the DB
+     */
+    Region getRegionEntry(String region);
+
+    /**
      * Fetches the regionId for a region with the specified name
      *
      * @param regionName name of the region to fetch the id for
